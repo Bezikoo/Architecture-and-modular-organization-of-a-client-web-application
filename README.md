@@ -1,24 +1,24 @@
 # Практична робота №5 — Архітектура та керування станом клієнтського застосунку
 
-Розширення клієнт-серверного застосунку з практичної роботи №4 (керування записами користувачів) шляхом введення явного рівня керування станом інтерфейсу та даних.
+Розширення архітектури клієнт-серверного застосунку шляхом введення явного рівня керування станом інтерфейсу та даних.
 
 Реалізовано два підходи:
-- **Завдання 1** — стандартні інструменти React (Context API + useReducer)
-- **Завдання 2** — зовнішня бібліотека Redux Toolkit
+- **Завдання 1** — стандартні інструменти React (Context API + `useReducer`). Модуль керування записами користувачів (на основі практичної роботи №4).
+- **Завдання 2** — централізоване сховище через Redux Toolkit. **Варіант 4** — клієнтський модуль для роботи із заявками користувачів / технічними зверненнями.
 
 ---
 
-## Завдання 1 — React Context API + useReducer
+## Завдання 1 — React Context API + `useReducer`
 
 ### Що реалізовано
 
-Стан організовано у три секції (`src/state/usersReducer.ts`):
+Модель стану організовано у три секції (`src/state/usersReducer.ts`):
 
 ```ts
 {
   data: {
-    users: User[];             // список користувачів з сервера
-    selectedUser: User | null; // вибраний для редагування
+    users: User[];              // список користувачів з сервера
+    selectedUser: User | null;  // вибраний для редагування
     pagination: PaginationData | null;
   },
   ui: {
@@ -36,7 +36,7 @@
 }
 ```
 
-#### Редуктор та дії (`src/state/usersReducer.ts`)
+#### Редуктор та дії
 
 Чиста функція без побічних ефектів. Дії:
 
@@ -53,18 +53,11 @@
 | `OPEN_FORM` / `CLOSE_FORM` | Відкриття/закриття форми |
 | `OPERATION_ERROR` | Помилка CRUD-операції |
 
-#### Контекст (`src/state/UsersContext.tsx`)
+#### Контекст і кастомний хук
 
-- Провайдер `UsersProvider` ініціалізує `useReducer`
-- При старті зчитує `search` і `page` з `localStorage`
-- `useEffect` синхронізує ці поля при кожній зміні — стан відновлюється після F5
-
-#### Кастомний хук `useUsers` (`src/hooks/useUsers.ts`)
-
-Єдина точка доступу до стану та API:
-- Запускає `fetchUsers` через `useEffect` при зміні фільтрів
-- Надає методи: `createUser`, `updateUser`, `deleteUser`, `openEditForm`, `openCreateForm`, `closeForm`
-- Після кожної CRUD-операції автоматично повторно завантажує список
+- `UsersProvider` ініціалізує `useReducer` зі значеннями з `localStorage`
+- `useEffect` синхронізує `search` і `page` з `localStorage` при кожній зміні — стан відновлюється після F5
+- Кастомний хук `useUsers` — єдина точка доступу до стану та API: автоматично запускає `fetchUsers` через `useEffect` при зміні фільтрів; після CRUD автоматично оновлює список
 
 #### Компоненти
 
@@ -75,164 +68,134 @@
 | `UserTable` | Чистий компонент відображення списку |
 | `UserForm` | Чистий компонент форми створення/редагування |
 
-### Структура файлів
+### Структура
 
 ```
 task-1/client/src/
-├── api/
-│   └── userApi.ts
-├── types/
-│   └── user.ts
+├── api/userApi.ts
+├── types/user.ts
 ├── state/
 │   ├── usersReducer.ts     # стан, типи дій, редуктор
 │   └── UsersContext.tsx    # контекст + провайдер + localStorage
-├── hooks/
-│   └── useUsers.ts         # кастомний хук (стан + API)
-├── components/
-│   ├── FilterPanel.tsx
-│   ├── UserTable.tsx
-│   └── UserForm.tsx
-├── pages/
-│   └── UsersPage.tsx
-└── App.tsx                 # обгортає <UsersProvider>
+├── hooks/useUsers.ts       # кастомний хук (стан + API)
+├── components/{FilterPanel,UserTable,UserForm}.tsx
+├── pages/UsersPage.tsx
+└── App.tsx
 ```
 
-### Як запустити
+### Запуск
 
 ```bash
-# 1. База даних
-cd task-1
-docker-compose up -d
-
-# 2. Сервер
-cd task-1/server
-npm install
-npm run migrate
-npm run dev         # http://localhost:3000
-
-# 3. Клієнт
-cd task-1/client
-npm install
-npm run dev         # http://localhost:5173
+cd task-1 && docker-compose up -d
+cd task-1/server && npm install && npm run migrate && npm run dev   # :3000
+cd task-1/client && npm install && npm run dev                      # :5173
 ```
 
 ---
 
-## Завдання 2 — Redux Toolkit
+## Завдання 2 — Redux Toolkit (Варіант 4: заявки користувачів)
 
-### Що реалізовано
+### Модель заявки
 
-#### Redux Store (`src/store/index.ts`)
+| Поле | Тип | Опис |
+|------|-----|------|
+| `id` | `number` | Унікальний ідентифікатор |
+| `subject` | `string` | Тема заявки |
+| `category` | `'technical' \| 'billing' \| 'general' \| 'complaint'` | Категорія |
+| `status` | `'new' \| 'in_progress' \| 'resolved' \| 'closed'` | Стан розгляду |
+| `description` | `string` | Короткий опис |
+| `createdAt` | `DateTime` | Дата створення |
+| `updatedAt` | `DateTime` | Дата оновлення |
+
+### Redux Store (`src/store/index.ts`)
 
 ```ts
 configureStore({
   reducer: {
-    users: usersReducer,  // дані та статуси запитів
-    ui: uiReducer,        // параметри інтерфейсу
+    tickets: ticketsReducer,  // дані заявок + статуси запитів
+    ui: uiReducer,            // параметри інтерфейсу
   }
 })
 ```
 
-#### Slice 1 — `usersSlice` (`src/store/usersSlice.ts`)
+#### Slice 1 — `ticketsSlice`
 
-Відповідає за дані предметної області:
+Дані предметної області + статуси запитів (`loading`, `success`, `error`).
 
-| Поле | Опис |
-|------|------|
-| `users` | Список користувачів |
-| `selectedUser` | Вибраний для редагування |
-| `pagination` | Дані пагінації |
-| `loading` | Виконується запит |
-| `success` | Запит завершено успішно |
-| `error` | Повідомлення про помилку |
-
-Асинхронні дії (`createAsyncThunk`):
+Асинхронні дії через `createAsyncThunk`:
 
 | Thunk | Опис |
 |-------|------|
-| `fetchUsers` | Отримує список з урахуванням параметрів з `uiSlice` |
-| `createUser` | Створює → автоматично викликає `fetchUsers` |
-| `updateUser` | Оновлює → автоматично викликає `fetchUsers` |
-| `deleteUser` | Видаляє → автоматично викликає `fetchUsers` |
+| `fetchTickets` | Список з урахуванням параметрів з `uiSlice` |
+| `fetchTicketById` | Відкриття конкретного запису |
+| `createTicket` | Створення → автоматично `fetchTickets` |
+| `updateTicket` | Оновлення (зокрема стану) → автоматично `fetchTickets` |
+| `deleteTicket` | Видалення → автоматично `fetchTickets` |
 
-Кожен thunk автоматично обробляє стани `pending → fulfilled → rejected`.
+Стани `pending → fulfilled → rejected` обробляються в `extraReducers`.
 
-#### Slice 2 — `uiSlice` (`src/store/uiSlice.ts`)
+#### Slice 2 — `uiSlice`
 
-Відповідає за параметри інтерфейсу:
+Параметри інтерфейсу та поточного перегляду:
 
 | Поле | Зберігається в localStorage |
 |------|-----------------------------|
 | `search` | Так |
+| `categoryFilter` | Так |
+| `statusFilter` | Так |
 | `page` | Так |
 | `sortBy` | Ні |
 | `order` | Ні |
-| `isFormOpen` | Ні |
+| `isFormOpen`, `viewMode` | Ні |
 
-При ініціалізації зчитує `search` і `page` з `localStorage`. При зміні — одразу зберігає. Дії `createUser.fulfilled` і `updateUser.fulfilled` автоматично закривають форму через `extraReducers`.
+Дії `createTicket.fulfilled` та `updateTicket.fulfilled` автоматично закривають форму через `extraReducers`.
 
 #### Окремий API-модуль
 
-`src/api/userApi.ts` — ізольований від Redux, викликається лише з thunks.
+`src/api/ticketApi.ts` — ізольований від Redux, викликається лише з thunks.
 
 #### Типізовані хуки
 
 | Хук | Призначення |
 |-----|-------------|
-| `useAppDispatch` | Типізований `useDispatch<AppDispatch>` |
-| `useAppSelector` | Типізований `useSelector<RootState>` |
+| `useAppDispatch` | `useDispatch<AppDispatch>` |
+| `useAppSelector` | `useSelector<RootState>` |
 
 #### Компоненти
 
 | Компонент | Роль |
 |-----------|------|
-| `UsersPage` | Підключається до store, координує взаємодію |
-| `FilterPanel` | Сам читає store і відправляє дії без props |
-| `UserTable` | Чистий компонент, отримує дані через props |
-| `UserForm` | Чистий компонент форми |
+| `TicketsPage` | Підключається до store, координує сценарії |
+| `FilterPanel` | Сам читає store і відправляє дії (без props) |
+| `TicketTable` | Чистий компонент: бейджі категорії та стану |
+| `TicketForm` | Чистий компонент форми |
+| `TicketDetails` | Перегляд конкретної заявки |
 
-### Структура файлів
+### Структура
 
 ```
 task-2/client/src/
-├── api/
-│   └── userApi.ts
-├── types/
-│   └── user.ts
+├── api/ticketApi.ts
+├── types/ticket.ts
 ├── store/
 │   ├── index.ts            # configureStore + RootState, AppDispatch
-│   ├── usersSlice.ts       # дані + async thunks
+│   ├── ticketsSlice.ts     # дані + async thunks
 │   └── uiSlice.ts          # UI-параметри + localStorage
-├── hooks/
-│   ├── useAppDispatch.ts
-│   └── useAppSelector.ts
-├── components/
-│   ├── FilterPanel.tsx
-│   ├── UserTable.tsx
-│   └── UserForm.tsx
-├── pages/
-│   └── UsersPage.tsx
-└── App.tsx                 # обгортає <Provider store={store}>
+├── hooks/{useAppDispatch,useAppSelector}.ts
+├── components/{FilterPanel,TicketTable,TicketForm,TicketDetails}.tsx
+├── pages/TicketsPage.tsx
+└── App.tsx
 ```
 
-### Як запустити
+### Запуск
 
 ```bash
-# 1. База даних
-cd task-2
-docker-compose up -d        # якщо вже запущено з task-1 — пропустити
-
-# 2. Сервер
-cd task-2/server
-npm install
-npm run migrate
-npm run dev                 # http://localhost:3000
-
-# 3. Клієнт
-cd task-2/client
-npm install
-npm run dev                 # http://localhost:5174
+cd task-2 && docker-compose up -d               # окрема БД tickets_management на :5433
+cd task-2/server && npm install && npm run migrate && npm run dev   # :3000
+cd task-2/client && npm install && npm run dev                      # :5174
 ```
+
+> Task-1 і task-2 використовують різні бази на різних портах (5432 / 5433), тому можуть працювати одночасно.
 
 ---
 
@@ -240,9 +203,10 @@ npm run dev                 # http://localhost:5174
 
 | | Завдання 1 | Завдання 2 |
 |-|------------|------------|
-| Інструмент | React Context + useReducer | Redux Toolkit |
+| Інструмент | React Context + `useReducer` | Redux Toolkit |
 | Де живе стан | Всередині React (Provider) | Поза React (Store) |
-| Async логіка | Вручну в `useEffect` | `createAsyncThunk` |
+| Предметна область | Користувачі | Заявки користувачів (варіант 4) |
+| Async-логіка | Вручну в `useEffect` | `createAsyncThunk` |
 | Генерація дій | Вручну константи | Автоматично через `createSlice` |
 | Доступ у компонентах | `useContext` або через props | `useSelector` / `useDispatch` |
 | Підходить для | Середніх додатків | Великих додатків |

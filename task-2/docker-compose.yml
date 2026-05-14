@@ -1,16 +1,16 @@
 services:
   db:
     image: postgres:latest
-    container_name: user_management_db
+    container_name: tickets_management_db
     restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: user_management
+      POSTGRES_DB: tickets_management
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql
+      - postgres_data_tickets:/var/lib/postgresql
 
 volumes:
-  postgres_data:
+  postgres_data_tickets:
