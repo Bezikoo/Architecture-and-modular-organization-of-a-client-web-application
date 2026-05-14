@@ -93,7 +93,7 @@ cd task-1/client && npm install && npm run dev                      # :5173
 
 ---
 
-## Завдання 2 — Redux Toolkit (Варіант 4: заявки користувачів)
+## Завдання 2 — Redux Toolkit (Варіант 4)
 
 ### Модель заявки
 
