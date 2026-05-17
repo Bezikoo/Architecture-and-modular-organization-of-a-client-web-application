@@ -6,21 +6,86 @@
 
 ---
 
+## Відповідність діаграмам
+
+### Рисунок 1 — Потік даних
+
+Діаграма описує такий ланцюжок:
+
+```
+Користувач → UI-компоненти → (подія/callback) → Контейнер/Сторінка
+  → зміна стану / dispatch(action) → Стан застосунку (Context/Reducer/Hook)
+  → запит до сервера → API-модуль → HTTP-запит → REST API сервер
+```
+
+Реалізований потік у коді (Redux Toolkit):
+
+```
+Користувач (клік / введення тексту)
+  → FilterPanel / TicketTable / TicketForm     (UI-компоненти)
+  → dispatch(setSearch(...)) або onClick prop  (подія)
+  → TicketsPage                                (Контейнер/Сторінка)
+  → dispatch(fetchTickets()) — async thunk     (зміна стану)
+  → ticketsSlice / uiSlice (Redux store)       (Стан застосунку)
+  → ticketApi (axios)                          (API-модуль)
+  → HTTP-запит до REST API сервера             (Express + Prisma + PostgreSQL)
+```
+
+Зворотний потік:
+`REST API → ticketApi → thunk.fulfilled → ticketsSlice → useAppSelector → компоненти`
+
+### Рисунок 2 — Діаграма компонентів
+
+Хоча Рисунок 2 описує архітектуру завдання 1 (з UseUsers hook і Context), ті самі шари присутні і в цьому завданні, але реалізовані через Redux:
+
+| Пакет на діаграмі (Рис.2) | Відповідник у завданні 2 |
+|---------------------------|--------------------------|
+| **Подання** → `UsersPage` | `src/pages/TicketsPage.tsx` |
+| **Подання** → `UserList` | `src/components/TicketTable.tsx` |
+| **Подання** → `UserForm` | `src/components/TicketForm.tsx` |
+| **Подання** → `FilterPanel` | `src/components/FilterPanel.tsx` |
+| **Координація** → `useUsers` | `TicketsPage` + `useAppDispatch` / `useAppSelector` |
+| **Керування станом** → `UsersContext` | Redux store (`src/store/index.ts`) |
+| **Керування станом** → `UsersReducer` | `ticketsSlice` + `uiSlice` |
+| **Доступ до даних** → `UsersApi` | `src/api/ticketApi.ts` |
+| **REST API сервер** | `server/src/` (Express + Prisma) |
+
+Додатково в цьому завданні реалізовано `TicketDetails` — окремий компонент детального перегляду заявки, що відповідає вимозі «відкриття конкретного запису».
+
+### Рисунок 3 — Орієнтовний вигляд UI
+
+| Елемент на скріншоті | Де реалізовано |
+|----------------------|----------------|
+| Заголовок сторінки | `TicketsPage.tsx` |
+| Поле пошуку | `FilterPanel.tsx` → `dispatch(setSearch(...))` |
+| Фільтр за категорією | `FilterPanel.tsx` → `dispatch(setCategoryFilter(...))` |
+| Фільтр за станом | `FilterPanel.tsx` → `dispatch(setStatusFilter(...))` |
+| Сортування | `FilterPanel.tsx` → `dispatch(setSortBy / setOrder)` |
+| Таблиця зі списком заявок | `TicketTable.tsx` — кольорові бейджі категорії та стану |
+| Кнопки Перегляд / Редагувати / Видалити | `TicketTable.tsx` → `onView` / `onEdit` / `onDelete` |
+| Детальний перегляд заявки | `TicketDetails.tsx` (режим `viewMode === 'view'`) |
+| Модальна форма редагування | `TicketForm.tsx` (режим `viewMode === 'edit'`) |
+| Пагінація | `TicketsPage.tsx` → `dispatch(setPage(...))` |
+| Індикатор завантаження | `TicketsPage.tsx` — умовний рендер за `tickets.loading` |
+| Повідомлення про помилку | `TicketsPage.tsx` — умовний рендер за `tickets.error`, клік очищає |
+
+---
+
 ## Як вимоги варіанту 4 відображені в реалізації
 
 | Вимога варіанту 4 | Де реалізовано |
 |-------------------|----------------|
 | **Тема** заявки | `Ticket.subject` (`schema.prisma`, `types/ticket.ts`) |
-| **Категорія** | `Ticket.category` — enum `technical \| billing \| general \| complaint` |
-| **Стан розгляду** | `Ticket.status` — enum `new \| in_progress \| resolved \| closed` |
+| **Категорія** | `Ticket.category` — `technical \| billing \| general \| complaint` |
+| **Стан розгляду** | `Ticket.status` — `new \| in_progress \| resolved \| closed` |
 | **Дата створення** | `Ticket.createdAt` (`@default(now())`) |
 | **Короткий опис** | `Ticket.description` |
-| Отримання списку заявок | `fetchTickets` (async thunk → `GET /api/tickets`) |
+| Отримання списку заявок | `fetchTickets` async thunk → `GET /api/tickets` |
 | Відкриття конкретного запису | `fetchTicketById` + компонент `TicketDetails` |
 | Редагування стану | `updateTicket` + поле `status` у `TicketForm` |
 | Фільтрація за категорією | `setCategoryFilter` (uiSlice) + `?category=` у API |
 | Фільтрація за станом | `setStatusFilter` (uiSlice) + `?status=` у API |
-| Пошук | `setSearch` (uiSlice) + `?search=` у API (по `subject`/`description`) |
+| Пошук | `setSearch` (uiSlice) + `?search=` у API (по `subject` та `description`) |
 | Пагінація | `pagination` у `ticketsSlice` + `setPage` у `uiSlice` |
 | Централізоване сховище даних | `ticketsSlice` (Redux store) |
 | Окреме збереження параметрів перегляду | `uiSlice` + `localStorage` |
@@ -81,7 +146,7 @@ configureStore({
 | `tickets` | Список заявок |
 | `selectedTicket` | Активна заявка (для перегляду або редагування) |
 | `pagination` | Метадані сторінкової навігації |
-| `loading` | Виконується запит |
+| `loading` | Виконується HTTP-запит |
 | `success` | Запит завершено успішно |
 | `error` | Повідомлення про помилку |
 
@@ -89,33 +154,33 @@ configureStore({
 
 | Thunk | HTTP-запит | Що робить |
 |-------|------------|-----------|
-| `fetchTickets` | `GET /api/tickets?...` | Отримує список з урахуванням параметрів з `uiSlice` |
+| `fetchTickets` | `GET /api/tickets?...` | Отримує список з параметрами з `uiSlice` через `getState()` |
 | `fetchTicketById` | `GET /api/tickets/:id` | Відкриває конкретну заявку |
-| `createTicket` | `POST /api/tickets` | Створює → автоматично диспатчить `fetchTickets()` |
-| `updateTicket` | `PUT /api/tickets/:id` | Оновлює (зокрема стан розгляду) → автоматично `fetchTickets()` |
-| `deleteTicket` | `DELETE /api/tickets/:id` | Видаляє → автоматично `fetchTickets()` |
+| `createTicket` | `POST /api/tickets` | Створює → автоматично `dispatch(fetchTickets())` |
+| `updateTicket` | `PUT /api/tickets/:id` | Оновлює → автоматично `dispatch(fetchTickets())` |
+| `deleteTicket` | `DELETE /api/tickets/:id` | Видаляє → автоматично `dispatch(fetchTickets())` |
 
-Стани `pending → fulfilled → rejected` обробляються через `extraReducers`. Параметри запиту читаються через `getState()`, що дозволяє вмикати/вимикати фільтри без зміни сигнатури thunk.
+Стани `pending → fulfilled → rejected` обробляються через `extraReducers`. Параметри запиту читаються через `getState()` — thunk не потребує аргументів для фільтрів.
 
 ### Slice 2 — `uiSlice` (`src/store/uiSlice.ts`)
 
-Відповідає за **параметри поточного перегляду** (окремо від даних):
+Відповідає за **параметри поточного перегляду** — зберігається окремо від даних:
 
-| Поле | Опис | Зберігається в `localStorage` |
-|------|------|-------------------------------|
+| Поле | Опис | `localStorage` |
+|------|------|---------------|
 | `search` | Пошук за темою або описом | ✅ |
 | `categoryFilter` | Фільтр за категорією | ✅ |
 | `statusFilter` | Фільтр за станом розгляду | ✅ |
 | `page` | Поточна сторінка | ✅ |
-| `sortBy` | Поле сортування | ❌ |
-| `order` | Напрямок сортування | ❌ |
-| `isFormOpen` | Чи відкрита модалка | ❌ |
-| `viewMode` | `'view'` (детальний перегляд) або `'edit'` (редагування) | ❌ |
+| `sortBy` | Поле сортування | — |
+| `order` | Напрямок сортування | — |
+| `isFormOpen` | Чи відкрита модалка | — |
+| `viewMode` | `'view'` або `'edit'` | — |
 
 **Особливості:**
-- Будь-яка зміна `search`, `categoryFilter`, `statusFilter` скидає `page` на 1
+- Зміна `search`, `categoryFilter`, `statusFilter` автоматично скидає `page` на 1
 - `createTicket.fulfilled` і `updateTicket.fulfilled` автоматично закривають форму через `extraReducers`
-- При ініціалізації `localStorage` зчитується — після F5 фільтри та сторінка відновлюються
+- При ініціалізації стану `localStorage` читається — після F5 фільтри та сторінка відновлюються
 
 ### Окремий API-модуль (`src/api/ticketApi.ts`)
 
@@ -134,11 +199,11 @@ configureStore({
 
 | Компонент | Шар | Роль |
 |-----------|-----|------|
-| `TicketsPage` | Контейнер | Підключається до store, реагує на зміну фільтрів через `useEffect`, координує дії (перегляд/редагування/видалення) |
-| `FilterPanel` | Подання | Сам читає `ui`-стан зі store через `useAppSelector` і відправляє дії через `useAppDispatch` — **без props** |
-| `TicketTable` | Подання | Чистий компонент: рядки заявок з кольоровими бейджами категорії та стану, кнопки **Перегляд / Редагувати / Видалити** |
+| `TicketsPage` | Контейнер | Підключається до store, `useEffect` реагує на зміну фільтрів → `dispatch(fetchTickets())`, координує дії |
+| `FilterPanel` | Подання | Сам читає `ui`-стан зі store через `useAppSelector` і відправляє дії через `useAppDispatch` — без зовнішніх props |
+| `TicketTable` | Подання | Чистий компонент: рядки заявок з кольоровими бейджами категорії та стану, кнопки Перегляд / Редагувати / Видалити |
 | `TicketForm` | Подання | Чистий компонент форми створення та редагування (включно зі зміною `status`) |
-| `TicketDetails` | Подання | Окремий екран детального перегляду конкретної заявки з можливістю переключитися в режим редагування |
+| `TicketDetails` | Подання | Детальний перегляд конкретної заявки з можливістю переключитися в режим редагування |
 
 ---
 
@@ -149,23 +214,23 @@ task-2/
 ├── client/
 │   └── src/
 │       ├── api/
-│       │   └── ticketApi.ts              # axios-запити до REST API
+│       │   └── ticketApi.ts              # axios-запити до REST API (шар «Доступ до даних»)
 │       ├── types/
 │       │   └── ticket.ts                 # типи + лейбли категорій/станів українською
 │       ├── store/
 │       │   ├── index.ts                  # configureStore + RootState, AppDispatch
-│       │   ├── ticketsSlice.ts           # дані + async thunks
-│       │   └── uiSlice.ts                # UI-параметри + localStorage
+│       │   ├── ticketsSlice.ts           # дані + async thunks (CRUD + fetch)
+│       │   └── uiSlice.ts                # UI-параметри + localStorage persistence
 │       ├── hooks/
-│       │   ├── useAppDispatch.ts
-│       │   └── useAppSelector.ts
+│       │   ├── useAppDispatch.ts         # типізований useDispatch
+│       │   └── useAppSelector.ts         # типізований useSelector
 │       ├── components/
 │       │   ├── FilterPanel.tsx           # пошук + категорія + стан + сортування
-│       │   ├── TicketTable.tsx
-│       │   ├── TicketForm.tsx
-│       │   └── TicketDetails.tsx         # детальний перегляд
+│       │   ├── TicketTable.tsx           # список заявок з бейджами
+│       │   ├── TicketForm.tsx            # форма створення/редагування
+│       │   └── TicketDetails.tsx         # детальний перегляд заявки
 │       ├── pages/
-│       │   └── TicketsPage.tsx
+│       │   └── TicketsPage.tsx           # контейнер-сторінка
 │       └── App.tsx                       # обгортає <Provider store={store}>
 ├── server/
 │   ├── prisma/
@@ -176,20 +241,20 @@ task-2/
 │       ├── controllers/ticketController.js
 │       ├── routes/ticketRoutes.js
 │       └── services/ticketService.js     # пошук, фільтри category/status, сортування, пагінація
-└── docker-compose.yml                    # окрема БД tickets_management на :5433
+└── docker-compose.yml                    # БД tickets_management на порту 5433
 ```
 
 ---
 
 ## REST API сервера
 
-| Метод | Маршрут | Опис |
-|-------|---------|------|
-| `GET` | `/api/tickets` | Список з фільтрами: `?page=&limit=&search=&sortBy=&order=&category=&status=` |
-| `GET` | `/api/tickets/:id` | Одна заявка |
-| `POST` | `/api/tickets` | Створення |
-| `PUT` | `/api/tickets/:id` | Оновлення (тема, категорія, стан, опис) |
-| `DELETE` | `/api/tickets/:id` | Видалення |
+| Метод | Маршрут | Параметри |
+|-------|---------|-----------|
+| `GET` | `/api/tickets` | `?page=&limit=&search=&sortBy=&order=&category=&status=` |
+| `GET` | `/api/tickets/:id` | — |
+| `POST` | `/api/tickets` | тіло: `subject`, `category`, `status`, `description` |
+| `PUT` | `/api/tickets/:id` | тіло: ті самі поля |
+| `DELETE` | `/api/tickets/:id` | — |
 
 ---
 
@@ -201,10 +266,10 @@ task-2/
               │                                                       │
               │  ticketsSlice                  uiSlice                │
               │  ┌─────────────────┐           ┌──────────────────┐  │
-              │  │ tickets[]       │           │ search           │  │
-              │  │ selectedTicket  │           │ categoryFilter ◄─┼──┐
-              │  │ pagination      │           │ statusFilter   ◄─┼──┤ localStorage
-              │  │ loading         │           │ page           ◄─┼──┘
+              │  │ tickets[]       │           │ search         ◄─┼──┐
+              │  │ selectedTicket  │           │ categoryFilter ◄─┼──┤ localStorage
+              │  │ pagination      │           │ statusFilter   ◄─┼──┤ (відновлення
+              │  │ loading         │           │ page           ◄─┼──┘  після F5)
               │  │ success         │           │ sortBy / order   │
               │  │ error           │           │ isFormOpen       │
               │  └────────┬────────┘           │ viewMode         │
@@ -218,10 +283,10 @@ task-2/
          │  dispatch(fetchTickets())  │                 │
          └──┬─────────────────────────┘                 │
             │                                           │
-            ├── onView   → selectTicket + openForm(view) ───┐
-            ├── onEdit   → selectTicket + openForm(edit) ───┤
-            ├── onDelete → deleteTicket  → fetchTickets() ──┤
-            └── onSubmit → create/update → fetchTickets() ──┤
+            ├── onView   → selectTicket + openForm('view')  ─┐
+            ├── onEdit   → selectTicket + openForm('edit')  ─┤
+            ├── onDelete → dispatch(deleteTicket(id))       ─┤→ авто fetchTickets
+            └── onSubmit → dispatch(create/updateTicket())  ─┘→ авто fetchTickets
                                                             │
          ┌─────────────────────────────────────────┐        │
          │    FilterPanel (читає store сам)        │        │
@@ -272,23 +337,24 @@ http://localhost:5174
 
 - [x] `configureStore`
 - [x] Щонайменше два slice (`ticketsSlice` + `uiSlice`)
-- [x] Асинхронні дії для роботи з REST API (`createAsyncThunk`)
-- [x] Окремий API-модуль (`src/api/ticketApi.ts`)
-- [x] `useSelector` і `useDispatch` (типізовані обгортки)
+- [x] Асинхронні дії для роботи з REST API (`createAsyncThunk`: fetchTickets, createTicket, updateTicket, deleteTicket, fetchTicketById)
+- [x] Окремий API-модуль (`src/api/ticketApi.ts`) — ізольований від Redux
+- [x] `useSelector` і `useDispatch` (типізовані обгортки `useAppSelector` / `useAppDispatch`)
 - [x] Централізоване зберігання параметрів інтерфейсу (`uiSlice`)
 - [x] Відновлення стану з `localStorage` (search, page, categoryFilter, statusFilter)
-- [x] Автоматичне оновлення/інвалідація даних після CRUD (thunk → `fetchTickets`)
+- [x] Автоматичне оновлення / інвалідація даних після CRUD (`dispatch(fetchTickets())` у thunk)
 - [x] Індикація `loading`, `success`, `error`
+- [x] Відповідність Рисунку 1 (потік даних), Рисунку 2 (компонентна архітектура), Рисунку 3 (UI)
 
 ## Чек-лист вимог варіанту 4
 
 - [x] Поля: тема, категорія, стан розгляду, дата створення, короткий опис
 - [x] Отримання списку заявок
-- [x] Відкриття конкретного запису (`TicketDetails`)
+- [x] Відкриття конкретного запису (`TicketDetails` у режимі `viewMode === 'view'`)
 - [x] Редагування стану (поле `status` у `TicketForm`)
 - [x] Фільтрація за категорією
 - [x] Фільтрація за станом
 - [x] Пошук
 - [x] Пагінація
-- [x] Централізоване сховище даних
-- [x] Окреме збереження параметрів поточного перегляду
+- [x] Централізоване сховище даних (`ticketsSlice`)
+- [x] Окреме збереження параметрів поточного перегляду (`uiSlice` + `localStorage`)

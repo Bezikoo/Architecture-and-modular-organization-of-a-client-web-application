@@ -1,13 +1,13 @@
 import React from 'react';
 import type { User } from '../types/user';
 
-interface UserTableProps {
+interface UserListProps {
   users: User[];
   onEdit: (user: User) => void;
   onDelete: (id: number) => void;
 }
 
-const UserTable: React.FC<UserTableProps> = ({ users, onEdit, onDelete }) => {
+const UserList: React.FC<UserListProps> = ({ users, onEdit, onDelete }) => {
   if (users.length === 0) {
     return <p className="no-data">No users found.</p>;
   }
@@ -47,4 +47,4 @@ const UserTable: React.FC<UserTableProps> = ({ users, onEdit, onDelete }) => {
   );
 };
 
-export default UserTable;
+export default UserList;

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useUsers } from '../hooks/useUsers';
-import UserTable from '../components/UserTable';
+import UserList from '../components/UserList';
 import UserForm from '../components/UserForm';
 import FilterPanel from '../components/FilterPanel';
 import type { UserFormData } from '../types/user';
@@ -49,7 +49,7 @@ const UsersPage: React.FC = () => {
         </div>
       ) : (
         <>
-          <UserTable
+          <UserList
             users={data.users}
             onEdit={openEditForm}
             onDelete={deleteUser}
